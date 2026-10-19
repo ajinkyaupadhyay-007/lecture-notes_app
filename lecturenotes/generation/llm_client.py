@@ -171,8 +171,15 @@ class LLMClient:
 
         api_key = self.llm_cfg.gemini_api_key or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
         if not api_key:
+            try:
+                import streamlit as _st
+                if hasattr(_st, "secrets"):
+                    api_key = str(_st.secrets.get("GEMINI_API_KEY", "") or _st.secrets.get("GOOGLE_API_KEY", ""))
+            except Exception:
+                pass
+        if not api_key:
             raise ValueError(
-                "Gemini provider selected but GEMINI_API_KEY (or GOOGLE_API_KEY) is missing in config or environment."
+                "Gemini provider selected but GEMINI_API_KEY (or GOOGLE_API_KEY) is missing in config, environment, or Streamlit secrets."
             )
 
         pref_model = self.llm_cfg.gemini_model or "gemini-2.5-flash"
