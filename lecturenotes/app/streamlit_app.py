@@ -1191,11 +1191,12 @@ active_bytes = None
 active_name = None
 
 if uploaded is not None:
-    active_bytes = uploaded.read()
+    active_bytes = uploaded.getvalue()
     active_name = uploaded.name
     st.session_state["active_file_bytes"] = active_bytes
     st.session_state["active_file_name"] = active_name
-elif "active_file_bytes" in st.session_state:
+    st.info(f"📁 **Uploaded PDF Ready:** `{active_name}` ({len(active_bytes):,} bytes)")
+elif "active_file_bytes" in st.session_state and st.session_state["active_file_bytes"]:
     active_bytes = st.session_state["active_file_bytes"]
     active_name = st.session_state["active_file_name"]
     st.info(f"📁 **Active Document:** `{active_name}` ({len(active_bytes):,} bytes)")
@@ -1232,7 +1233,7 @@ with col_gen_fast:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if generate_btn:
-    if active_bytes is None:
+    if not active_bytes:
         st.warning("⚠️ **No document loaded yet!** Please upload a lecture PDF or select **📄 Sample 1 (ML Basics)** above before generating.")
     else:
         with st.status("🚀 Processing lecture materials…", expanded=True) as status_box:
