@@ -16,9 +16,18 @@ from __future__ import annotations
 
 import datetime
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Ensure project root is in sys.path so 'lecturenotes' is importable in all environments
+_repo_root = Path(__file__).resolve().parents[2]
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+_cwd = Path.cwd().resolve()
+if str(_cwd) not in sys.path:
+    sys.path.insert(0, str(_cwd))
 
 import streamlit as st
 
@@ -583,7 +592,10 @@ if st.session_state.get("auth_user") is None:
 # Authenticated User Progress
 # ─────────────────────────────────────────────────────────────────────────────
 
-auth_user = st.session_state["auth_user"]
+auth_user = st.session_state.get("auth_user")
+if not auth_user or not isinstance(auth_user, dict) or "id" not in auth_user:
+    st.stop()
+
 if "user_progress_data" not in st.session_state:
     st.session_state["user_progress_data"] = load_user_progress_db(auth_user["id"])
 progress = UserProgress(st.session_state["user_progress_data"])
