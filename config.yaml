@@ -24,7 +24,7 @@ nli:
 
 llm:
   provider: gemini                  # gemini | azure | claude | ollama | mock
-  gemini_model: gemini-flash-latest
+  gemini_model: gemini-2.5-flash
   ollama_base_url: http://localhost:11434
   ollama_model: llama3.1:8b
   azure_deployment: gpt-4o

@@ -181,7 +181,8 @@ def generate_lecture_materials(
 
     from concurrent.futures import ThreadPoolExecutor
 
-    max_workers = min(6, max(1, len(sections)))
+    is_gemini = getattr(getattr(client, "llm_cfg", None), "provider", "").lower() == "gemini"
+    max_workers = min(3 if is_gemini else 6, max(1, len(sections)))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         section_notes = list(executor.map(_gen_single_note, sections))
 

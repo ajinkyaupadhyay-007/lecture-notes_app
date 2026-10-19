@@ -54,6 +54,13 @@ def extract_pdf_from_bytes(
     """Extract text from PDF raw bytes (e.g. from UI file uploader)."""
     if not pdf_bytes:
         raise ValueError("PDF bytes are empty.")
+    if hasattr(min_chars, "pdf_min_chars_per_page"):
+        min_chars = getattr(min_chars, "pdf_min_chars_per_page", 10)
+    elif not isinstance(min_chars, int):
+        try:
+            min_chars = int(min_chars)
+        except Exception:
+            min_chars = 10
     doc: fitz.Document = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         return _extract_from_doc(doc, min_chars=min_chars, source_name=source_name)

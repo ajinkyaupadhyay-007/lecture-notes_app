@@ -167,7 +167,7 @@ class LLMClient:
     def _call_gemini(self, prompt: str, system_prompt: str) -> str:
         """Execute request using Google Gemini REST API with native JSON response mode."""
         if LLMClient._gemini_quota_exhausted:
-            raise RuntimeError("Gemini API quota is currently exhausted; fast-failing to extractive fallback.")
+            raise RuntimeError("Gemini API key is invalid or unauthorized; fast-failing to extractive fallback.")
 
         api_key = self.llm_cfg.gemini_api_key or os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
         if not api_key:
@@ -176,8 +176,11 @@ class LLMClient:
             )
 
         pref_model = self.llm_cfg.gemini_model or "gemini-2.5-flash"
-        # Only use confirmed-working models — skip deprecated/overloaded ones that waste retries
-        candidate_models = ["gemini-2.5-flash", pref_model, "gemini-1.5-flash-8b", "gemini-1.5-flash"]
+        raw_candidates = [pref_model, "gemini-2.5-flash", "gemini-3-flash-preview"]
+        candidate_models = [
+            m for m in dict.fromkeys(raw_candidates)
+            if m not in ("gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.5-flash-lite", "gemini-flash-lite-latest")
+        ]
         last_error = None
 
         payload = {
@@ -197,39 +200,45 @@ class LLMClient:
             },
         }
 
-        for model in dict.fromkeys(candidate_models):
+        import time
+
+        for model in candidate_models:
             model_path = model if model.startswith("models/") else f"models/{model}"
             url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={api_key}"
 
-            try:
-                with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
-                    res = client.post(url, json=payload)
-                    if res.status_code == 200:
-                        data = res.json()
-                        candidates = data.get("candidates", [])
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts:
-                                return parts[0].get("text", "{}")
-                    # If 404 or unsupported or 429, record error and try next model
-                    err_msg = res.text
-                    try:
-                        err_json = res.json()
-                        err_msg = err_json.get("error", {}).get("message", res.text)
-                    except Exception:
-                        pass
-                    last_error = RuntimeError(f"Gemini API ({model}) failed ({res.status_code}): {err_msg}")
-                    if res.status_code in (401, 403):
-                        LLMClient._gemini_quota_exhausted = True
-                        raise last_error
-                    # If 429 or 404, continue to next candidate model
+            for attempt in range(2):
+                try:
+                    with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
+                        res = client.post(url, json=payload)
+                        if res.status_code == 200:
+                            data = res.json()
+                            candidates = data.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                if parts:
+                                    return parts[0].get("text", "{}")
+
+                        err_msg = res.text
+                        try:
+                            err_json = res.json()
+                            err_msg = err_json.get("error", {}).get("message", res.text)
+                        except Exception:
+                            pass
+                        last_error = RuntimeError(f"Gemini API ({model}) failed ({res.status_code}): {err_msg}")
+                        if res.status_code in (401, 403):
+                            LLMClient._gemini_quota_exhausted = True
+                            raise last_error
+
+                        if res.status_code in (429, 503):
+                            time.sleep(2.0 * (attempt + 1))
+                            continue
+                        break
+                except httpx.RequestError as err:
+                    last_error = ConnectionError(f"Network error connecting to Gemini API: {err}")
+                    time.sleep(1.0)
                     continue
-            except httpx.RequestError as err:
-                last_error = ConnectionError(f"Network error connecting to Gemini API: {err}")
-                continue
 
         if last_error:
-            LLMClient._gemini_quota_exhausted = True
             raise last_error
         raise RuntimeError("Gemini API call failed with unknown error.")
 
