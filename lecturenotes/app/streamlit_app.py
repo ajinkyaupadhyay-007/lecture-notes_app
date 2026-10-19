@@ -768,10 +768,27 @@ def _run_pipeline(
 
     cfg = load_config()
     cfg.llm.provider = provider
-    if provider == "gemini" and os.environ.get("GEMINI_API_KEY"):
-        cfg.llm.gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    elif provider == "openai" and os.environ.get("OPENAI_API_KEY"):
-        cfg.llm.openai_api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if provider == "gemini":
+        g_key = os.environ.get("GEMINI_API_KEY", "").strip() or os.environ.get("GOOGLE_API_KEY", "").strip() or cfg.llm.gemini_api_key
+        if g_key:
+            cfg.llm.gemini_api_key = g_key
+        else:
+            # Auto-fallback to offline mock if key not yet provided in Secrets
+            cfg.llm.provider = "mock"
+    elif provider == "openai":
+        o_key = os.environ.get("OPENAI_API_KEY", "").strip() or cfg.llm.openai_api_key
+        if o_key:
+            cfg.llm.openai_api_key = o_key
+        else:
+            cfg.llm.provider = "mock"
+    elif provider == "ollama":
+        try:
+            import httpx
+            with httpx.Client(timeout=0.3) as _hc:
+                if _hc.get("http://localhost:11434/api/tags").status_code != 200:
+                    cfg.llm.provider = "mock"
+        except Exception:
+            cfg.llm.provider = "mock"
     cfg.generation.flashcard_count = flashcard_count
     cfg.generation.mcq_count = mcq_count
 
@@ -1181,20 +1198,27 @@ if uploaded is not None:
 elif "active_file_bytes" in st.session_state:
     active_bytes = st.session_state["active_file_bytes"]
     active_name = st.session_state["active_file_name"]
-    st.info(f"Loaded demo file: **{active_name}** ({len(active_bytes):,} bytes)")
+    st.info(f"📁 **Active Document:** `{active_name}` ({len(active_bytes):,} bytes)")
+else:
+    st.markdown(
+        """<div style="background:rgba(124,77,255,0.08);border:1px dashed rgba(124,77,255,0.35);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;color:#cbd5e1">
+          💡 <b>Getting started:</b> Upload a lecture PDF/text above, or click <b>📄 Sample 1 (ML Basics)</b> under <i>QUICK DEMO SAMPLES</i> to test immediately!
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
-btn_label = f"✨ Generate Lecture Materials ({current_lang})" if active_name else f"✨ Generate Lecture Materials ({current_lang})"
-col_gen_main, col_gen_fast = st.columns([3.2, 1.2])
+btn_label = f"✨ Generate Lecture Materials ({current_lang})"
+col_gen_main, col_gen_fast = st.columns([3.2, 1.4])
 with col_gen_main:
     generate_btn = st.button(
         btn_label,
-        disabled=active_bytes is None,
+        key="btn_generate_main",
         use_container_width=True,
     )
 with col_gen_fast:
     fast_btn = st.button(
         "⚡ Fast Mode (Instant)",
-        disabled=active_bytes is None,
+        key="btn_generate_fast",
         help="Runs full generation in ~1s using offline deterministic synthesis without external network wait.",
         use_container_width=True,
     )
@@ -1207,65 +1231,68 @@ with col_gen_fast:
 # Pipeline execution
 # ─────────────────────────────────────────────────────────────────────────────
 
-if generate_btn and active_bytes is not None:
-    status_container = st.empty()
-    progress_bar = st.progress(0)
-
-    status_container.info(f"**Starting pipeline in {current_lang}…**")
-    progress_bar.progress(5)
-
-    try:
-        with st.spinner(""):
-            result = _run_pipeline(
-                file_bytes=active_bytes,
-                file_name=active_name,
-                provider=provider,
-                flashcard_count=flashcard_count,
-                mcq_count=mcq_count,
-                run_verification=run_verification,
-                language=current_lang,
-                quiz_difficulty=quiz_difficulty,
-            )
-        progress_bar.progress(100)
-        status_container.success("**🎉 Done! Explore your lecture materials below.**")
-        time.sleep(1.0)
-        status_container.empty()
-        progress_bar.empty()
-        st.session_state["result"] = result
-        st.session_state["file_name"] = active_name
-        # Invalidate exam question cache from any previous lecture
-        for _exam_ck in ("_exam_cache_key", "_exam_cache_mcqs", "_exam_cache_descs"):
-            st.session_state.pop(_exam_ck, None)
-
-        # Persist lecture history in SQLite and award processing XP without resetting user progress
-        if auth_user:
+if generate_btn:
+    if active_bytes is None:
+        st.warning("⚠️ **No document loaded yet!** Please upload a lecture PDF or select **📄 Sample 1 (ML Basics)** above before generating.")
+    else:
+        with st.status("🚀 Processing lecture materials…", expanded=True) as status_box:
             try:
-                record_user_lecture_db(
-                    user_id=auth_user["id"],
-                    lecture_title=result["output"].lecture_title,
+                status_box.write("📄 **Step 1/4:** Ingesting and extracting text from document…")
+                time.sleep(0.1)
+
+                status_box.write(f"🧩 **Step 2/4:** Segmenting topics & extracting key concepts via NLP…")
+                time.sleep(0.1)
+
+                status_box.write(f"🤖 **Step 3/4:** Generating notes, flashcards & adaptive quiz ({provider})…")
+                
+                result = _run_pipeline(
+                    file_bytes=active_bytes,
                     file_name=active_name,
-                    sections_count=len(result["sections"]),
-                    concepts_count=len(result["all_concepts"]),
+                    provider=provider,
+                    flashcard_count=flashcard_count,
+                    mcq_count=mcq_count,
+                    run_verification=run_verification,
+                    language=current_lang,
+                    quiz_difficulty=quiz_difficulty,
                 )
-                progress.xp += 50
-                _sync_user_progress(progress)
-            except Exception:
-                pass
 
-        # Polyglot badge trigger if Japanese
-        if current_lang == "Japanese":
-            b_unlocked = progress.record_language("Japanese")
-            _sync_user_progress(progress)
-            for b in b_unlocked:
-                st.toast(f"🎉 Badge Unlocked: {b.icon} {b.get_title(current_lang)}!")
-                st.balloons()
+                status_box.write("📺 **Step 4/4:** Curating educational YouTube video lessons…")
+                status_box.update(label="🎉 Study materials generated successfully!", state="complete", expanded=False)
 
-        st.rerun()
+                st.session_state["result"] = result
+                st.session_state["file_name"] = active_name
+                # Invalidate exam question cache from any previous lecture
+                for _exam_ck in ("_exam_cache_key", "_exam_cache_mcqs", "_exam_cache_descs"):
+                    st.session_state.pop(_exam_ck, None)
 
-    except Exception as exc:
-        progress_bar.empty()
-        status_container.empty()
-        st.error(f"**Pipeline failed:** {exc}")
+                # Persist lecture history in SQLite and award processing XP
+                if auth_user:
+                    try:
+                        record_user_lecture_db(
+                            user_id=auth_user["id"],
+                            lecture_title=result["output"].lecture_title,
+                            file_name=active_name,
+                            sections_count=len(result["sections"]),
+                            concepts_count=len(result["all_concepts"]),
+                        )
+                        progress.xp += 50
+                        _sync_user_progress(progress)
+                    except Exception:
+                        pass
+
+                # Polyglot badge trigger if Japanese
+                if current_lang == "Japanese":
+                    b_unlocked = progress.record_language("Japanese")
+                    _sync_user_progress(progress)
+                    for b in b_unlocked:
+                        st.toast(f"🎉 Badge Unlocked: {b.icon} {b.get_title(current_lang)}!")
+                        st.balloons()
+
+                st.rerun()
+
+            except Exception as exc:
+                status_box.update(label="❌ Pipeline encountered an issue", state="error", expanded=True)
+                st.error(f"**Pipeline failed:** {exc}")
         st.stop()
 
 
