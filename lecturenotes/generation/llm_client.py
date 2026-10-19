@@ -176,7 +176,8 @@ class LLMClient:
             )
 
         pref_model = self.llm_cfg.gemini_model or "gemini-2.5-flash"
-        candidate_models = ["gemini-2.5-flash", pref_model, "gemini-flash-latest", "gemini-flash-lite-latest"]
+        # Only use confirmed-working models — skip deprecated/overloaded ones that waste retries
+        candidate_models = ["gemini-2.5-flash", pref_model, "gemini-1.5-flash-8b", "gemini-1.5-flash"]
         last_error = None
 
         payload = {
@@ -201,7 +202,7 @@ class LLMClient:
             url = f"https://generativelanguage.googleapis.com/v1beta/{model_path}:generateContent?key={api_key}"
 
             try:
-                with httpx.Client(timeout=httpx.Timeout(25.0, connect=5.0)) as client:
+                with httpx.Client(timeout=httpx.Timeout(90.0, connect=8.0)) as client:
                     res = client.post(url, json=payload)
                     if res.status_code == 200:
                         data = res.json()

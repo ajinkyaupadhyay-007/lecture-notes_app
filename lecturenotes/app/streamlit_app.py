@@ -1245,7 +1245,8 @@ if generate_btn:
                 time.sleep(0.1)
 
                 status_box.write(f"🤖 **Step 3/4:** Generating notes, flashcards & adaptive quiz ({provider})…")
-                
+                status_box.write(f"  ⏳ *This takes 30–90 seconds while the AI processes each section of your document in parallel. Please wait…*")
+
                 result = _run_pipeline(
                     file_bytes=active_bytes,
                     file_name=active_name,
