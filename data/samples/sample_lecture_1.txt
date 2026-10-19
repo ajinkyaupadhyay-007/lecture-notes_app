@@ -1,0 +1,49 @@
+Introduction to Machine Learning — Lecture 1
+
+Page 1
+Welcome to CS 4780: Introduction to Machine Learning. In this course we will study how computers learn from data to make predictions and decisions without being explicitly programmed.
+
+Machine learning is broadly divided into three paradigms: supervised learning, unsupervised learning, and reinforcement learning. Today's lecture focuses on supervised learning.
+
+Page 2
+In supervised learning, we are given a training set of labelled examples {(x_1, y_1), ..., (x_n, y_n)}. The goal is to learn a function f such that f(x) ≈ y for new, unseen inputs x.
+
+Common supervised learning tasks include classification (predicting a discrete label) and regression (predicting a continuous value). For example, classifying whether an email is spam or not spam is a classification problem.
+
+Page 3
+The bias-variance trade-off is a fundamental concept in machine learning. Bias refers to error introduced by approximating a complex real-world problem with a simplified model. Variance refers to sensitivity of the model to fluctuations in the training set.
+
+High bias leads to underfitting — the model is too simple to capture the underlying pattern. High variance leads to overfitting — the model memorises training data but fails to generalise.
+
+Page 4
+Linear regression is one of the simplest supervised learning algorithms. Given features x ∈ R^d and targets y ∈ R, it fits a linear function f(x) = w^T x + b by minimising the mean squared error (MSE) loss.
+
+The solution can be found in closed form via the normal equations: w = (X^T X)^{-1} X^T y, or iteratively using gradient descent.
+
+Page 5
+Gradient descent is an iterative optimisation algorithm. Starting from an initial parameter vector w_0, we repeatedly update: w_{t+1} = w_t - η ∇L(w_t), where η is the learning rate and ∇L is the gradient of the loss.
+
+Stochastic gradient descent (SGD) approximates the full gradient using a single random sample or a mini-batch, which is computationally efficient for large datasets.
+
+Page 6
+Decision trees partition the feature space into rectangular regions. At each internal node the tree selects a feature and threshold that best splits the data, typically by minimising Gini impurity or maximising information gain.
+
+Random forests are ensembles of decision trees trained on bootstrap samples of the data. By averaging predictions, they reduce variance while keeping bias low.
+
+Page 7
+Support vector machines (SVMs) find the maximum-margin hyperplane that separates two classes. The margin is the distance between the hyperplane and the nearest training examples, called support vectors.
+
+For non-linearly separable data, the kernel trick allows SVMs to operate in a high-dimensional feature space implicitly, without computing the explicit mapping.
+
+Page 8
+Model evaluation is critical. We must not evaluate a model on the data it was trained on, as this gives an overly optimistic estimate. Instead, we hold out a test set.
+
+Cross-validation — particularly k-fold cross-validation — is a robust evaluation strategy. The training data is split into k folds; the model is trained on k-1 folds and evaluated on the remaining fold, cycling through all folds.
+
+Page 9
+Regularisation is a technique to reduce overfitting by adding a penalty term to the loss function. L2 regularisation (Ridge) adds λ||w||_2^2, shrinking weights towards zero. L1 regularisation (Lasso) adds λ||w||_1, which can drive some weights to exactly zero, producing sparse models.
+
+The regularisation strength λ is a hyperparameter that must be tuned using a validation set.
+
+Page 10
+Summary: Today we covered the supervised learning paradigm, the bias-variance trade-off, linear regression, gradient descent, decision trees, random forests, SVMs, model evaluation, and regularisation. Next lecture we will explore neural networks and deep learning.
